@@ -61,11 +61,11 @@
 
   # The lowRISC public nix-cache contains builds of nix packages used by lowRISC, primarily coming from github:lowRISC/lowrisc-nix.
   nixConfig = {
-    extra-substituters = ["https://nix-cache.lowrisc.org/public/"];
-    extra-trusted-public-keys = ["nix-cache.lowrisc.org-public-1:O6JLD0yXzaJDPiQW1meVu32JIDViuaPtGDfjlOopU7o="];
+    extra-substituters = [ "https://nix-cache.lowrisc.org/public/" ];
+    extra-trusted-public-keys = [ "nix-cache.lowrisc.org-public-1:O6JLD0yXzaJDPiQW1meVu32JIDViuaPtGDfjlOopU7o=" ];
   };
 
-  outputs = inputs@{self, ...}:
+  outputs = inputs@{ self, ... }:
     let
 
       # System types to support.
@@ -74,7 +74,8 @@
         aarch64-darwin
       ];
 
-    in inputs.flake-utils.lib.eachSystem supportedSystems (system:
+    in
+    inputs.flake-utils.lib.eachSystem supportedSystems (system:
       let
         pkgs = import inputs.nixpkgs {
           inherit system;
@@ -100,32 +101,33 @@
         # - Using the fusesoc .core files in this repo requires a lowrisc-fork of fusesoc, so this
         #   file specifies the forked repository. Most other python package dependencies are in
         #   support of fusesoc.
-        formal_python_env = let
-          workspace = inputs.uv2nix.lib.workspace.loadWorkspace {
-            workspaceRoot = ./dv/formal;
-          };
-          overlay = workspace.mkPyprojectOverlay {
-            sourcePreference = "wheel";
-          };
-          pythonSet =
-            (pkgs.callPackage inputs.pyproject-nix.build.packages {
-              python = pkgs.python3;
-            }).overrideScope (
-              lib.composeManyExtensions [
-                inputs.pyproject-build-systems.overlays.default
-                overlay
-                (inputs.lowrisc-nix.lib.pyprojectOverrides {
-                  inherit pkgs;
-                })
-                (final: prev: {
-                  jsonschema2md = prev.jsonschema2md.overrideAttrs (old: {
-                    # Manually add babel to the build inputs
-                    nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.babel ];
-                  });
-                })
-              ]
-          );
-        in
+        formal_python_env =
+          let
+            workspace = inputs.uv2nix.lib.workspace.loadWorkspace {
+              workspaceRoot = ./dv/formal;
+            };
+            overlay = workspace.mkPyprojectOverlay {
+              sourcePreference = "wheel";
+            };
+            pythonSet =
+              (pkgs.callPackage inputs.pyproject-nix.build.packages {
+                python = pkgs.python3;
+              }).overrideScope (
+                lib.composeManyExtensions [
+                  inputs.pyproject-build-systems.overlays.default
+                  overlay
+                  (inputs.lowrisc-nix.lib.pyprojectOverrides {
+                    inherit pkgs;
+                  })
+                  (final: prev: {
+                    jsonschema2md = prev.jsonschema2md.overrideAttrs (old: {
+                      # Manually add babel to the build inputs
+                      nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.babel ];
+                    });
+                  })
+                ]
+              );
+          in
           pythonSet.mkVirtualEnv "ibex-env" workspace.deps.default;
 
         # rIC3 needs a nightly toolchain
@@ -193,46 +195,50 @@
           EOF
         '';
 
-        in {
-          packages = {
-            # Export the package for the lowrisc fork of the sail compiler. This allows us
-            # to re-use its build environment when using the .#formal-dev flow.
-            inherit lowrisc_sail;
+      in
+      {
+        packages = {
+          # Export the package for the lowrisc fork of the sail compiler. This allows us
+          # to re-use its build environment when using the .#formal-dev flow.
+          inherit lowrisc_sail;
+        };
+        devShells = rec {
+          formal = mkshell-minimal {
+            packages = standard_deps;
+            shellHook = check_jg + exports;
           };
-          devShells = rec {
-            formal = mkshell-minimal {
-              packages = standard_deps;
-              shellHook = check_jg + exports;
-            };
 
-            formal-dev = mkshell-minimal {
-              packages = standard_deps;
-              shellHook = check_jg + exports + dev_msg;
-            };
+          formal-dev = mkshell-minimal {
+            packages = standard_deps;
+            shellHook = check_jg + exports + dev_msg;
+          };
 
-            oss-dev = mkshell-minimal {
-              packages = standard_deps ++ [
-                lowrisc_yosys_slang
-                ((pkgs.yosys.override (attrs: { enablePython = false; })).overrideAttrs (finalAttrs: prev: { doCheck = false; }))
-              ] ++ (with pkgs; [
-                gtkwave # not stricly necesssary
-                ric3
+          oss-dev = mkshell-minimal {
+            packages = standard_deps ++ [
+              lowrisc_yosys_slang
+              ((pkgs.yosys.override (attrs: { enablePython = false; })).overrideAttrs (finalAttrs: prev: { doCheck = false; }))
+            ] ++ (with pkgs; [
+              gtkwave # not stricly necesssary
+              ric3
 
-                # aig-manip (maybe just build in nix anyway?)
-                toolchain.cargo
-                toolchain.rustc
-                cmake
-                clang
+              pkgsCross.riscv32-embedded.buildPackages.gcc
+              srecord
 
-                # yosys-config
-                gcc
-              ]);
-              shellHook = exports + dev_msg + ''
-                export LOWRISC_YOSYS_SLANG=${lowrisc_yosys_slang.out}/lib/slang.so
-                export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib/ # for rIC3, not sure why this should be necessary though
-              '';
-            };
+              # aig-manip (maybe just build in nix anyway?)
+              toolchain.cargo
+              toolchain.rustc
+              cmake
+              clang
+
+              # yosys-config
+              gcc
+            ]);
+            shellHook = exports + dev_msg + ''
+              export LOWRISC_YOSYS_SLANG=${lowrisc_yosys_slang.out}/lib/slang.so
+              export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib/ # for rIC3, not sure why this should be necessary though
+            '';
+          };
         };
       }
-  );
+    );
 }
