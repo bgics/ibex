@@ -221,9 +221,6 @@
               gtkwave # not stricly necesssary
               ric3
 
-              pkgsCross.riscv32-embedded.buildPackages.gcc
-              srecord
-
               # aig-manip (maybe just build in nix anyway?)
               toolchain.cargo
               toolchain.rustc

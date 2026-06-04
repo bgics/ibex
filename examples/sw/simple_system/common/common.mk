@@ -30,6 +30,8 @@ CRT ?= $(COMMON_DIR)/crt0.S
 CFLAGS ?= -march=$(ARCH) -mabi=ilp32 -static -mcmodel=medany -Wall -g -Os\
 	-fvisibility=hidden -nostdlib -nostartfiles -ffreestanding $(PROGRAM_CFLAGS)
 
+LIBS += -lgcc
+
 OBJS := ${C_SRCS:.c=.o} ${ASM_SRCS:.S=.o} ${CRT:.S=.o}
 DEPS = $(OBJS:%.o=%.d)
 
