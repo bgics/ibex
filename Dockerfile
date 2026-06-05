@@ -21,7 +21,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     git ca-certificates help2man perl python3 make autoconf g++ flex bison ccache libgoogle-perftools-dev libjemalloc-dev numactl perl-doc libfl2 libfl-dev
 
-RUN git clone --branch v5.048 https://github.com/verilator/verilator
+RUN git clone --branch v5.046 https://github.com/verilator/verilator
 WORKDIR /verilator
 
 RUN autoconf && \
@@ -37,11 +37,26 @@ COPY --from=verilator-builder /opt/verilator /opt/verilator
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     make \
+    build-essential \
     python3 \
     python3-pip \
+    python3-venv \
     git \
+    libelf-dev \
+    srecord \
+    libmpc3 \
+    ccache \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/opt/verilator/bin:/opt/riscv/bin:${PATH}"
+ENV VENV=/opt/venv
+
+RUN python3 -m venv ${VENV}
+
+ENV PATH="/opt/verilator/bin:/opt/riscv/bin:${VENV}/bin:${PATH}"
+
+COPY python-requirements.txt .
+COPY ./vendor/google_riscv-dv/requirements.txt ./vendor/google_riscv-dv/requirements.txt
+
+RUN pip install -U -r python-requirements.txt
 
 CMD ["/bin/bash"]

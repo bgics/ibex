@@ -23,6 +23,10 @@ int main(int argc, char **argv) {
 
   uint64_t last_elapsed_time = get_elapsed_time();
 
+  pcount_enable(0);
+  pcount_reset();
+  pcount_enable(1);
+
   union {
     float f;
     uint32_t u;
@@ -33,6 +37,8 @@ int main(int argc, char **argv) {
   for (int i = 0; i < 30; i++) {
     x.f += 1.13f;
   }
+
+  pcount_enable(0);
 
   puts("Float value is: ");
   puthex(x.u);
