@@ -1,86 +1,52 @@
-# Build:
-#   docker build -t ibex-dev .
-#
-# Run:
-#   docker run --rm -it -v "$PWD:/work" -w /work ibex-dev bash
+FROM ubuntu:24.04 AS toolchain-builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    autoconf automake autotools-dev curl python3 python3-pip python3-tomli libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build git cmake libglib2.0-dev libslirp-dev libncurses-dev
+
+RUN git clone https://github.com/riscv/riscv-gnu-toolchain
+WORKDIR riscv-gnu-toolchain
+
+RUN ./configure \
+    --prefix=/opt/riscv \
+    --with-arch=rv32imcb_zicsr_zifencei \
+    --with-abi=ilp32 \
+    --disable-multilib \
+    --disable-gdb \
+    --disable-qemu \
+    --disable-linux \
+    --enable-languages=c \
+    --with-newlib && \
+    make -j6
+
+FROM ubuntu:24.04 AS verilator-builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git ca-certificates help2man perl python3 make autoconf g++ flex bison ccache libgoogle-perftools-dev libjemalloc-dev numactl perl-doc libfl2 libfl-dev
+
+RUN git clone https://github.com/verilator/verilator
+WORKDIR verilator
+
+RUN git checkout stable && \
+    autoconf && \
+    ./configure --prefix=/opt/verilator && \
+    make -j"$(nproc)" && \
+    make install
 
 FROM ubuntu:24.04
 
-ARG DEBIAN_FRONTEND=noninteractive
-SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+COPY --from=toolchain-builder /opt/riscv /opt/riscv
+COPY --from=verilator-builder /opt/verilator /opt/verilator
 
-# ---- OS deps ----
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    autoconf automake autotools-dev \
-    bash \
-    bc \
-    bison \
-    build-essential \
-    ca-certificates \
-    ccache \
-    cmake \
-    curl \
-    device-tree-compiler \
-    flex \
-    gawk \
-    gdb \
-    git \
-    gnupg \
-    libexpat1-dev \
-    libffi-dev \
-    libgmp-dev \
-    libmpc-dev \
-    libmpfr-dev \
-    libssl-dev \
-    libtool \
-    libz-dev \
-    libelf-dev \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     make \
-    ninja-build \
-    patchutils \
-    pkg-config \
     python3 \
     python3-pip \
-    python3-venv \
-    srecord \
-    texinfo \
-    verilator \
-    zlib1g-dev \
- && rm -rf /var/lib/apt/lists/*
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# ---- Python tooling + FuseSoC ----
-RUN pip3 install --no-cache-dir -U pip setuptools wheel \
- && pip3 install --no-cache-dir -U fusesoc
+ENV PATH="/opt/verilator/bin:/opt/riscv/bin:${PATH}"
 
-# ---- Install Ibex python requirements at image build time ----
-# This assumes you run `docker build` from the Ibex repo root (so python-requirements.txt is present).
-COPY python-requirements.txt /tmp/python-requirements.txt
-RUN pip3 install --no-cache-dir -U -r /tmp/python-requirements.txt \
- && rm -f /tmp/python-requirements.txt
-
-# ---- Build riscv-gnu-toolchain (newlib) for RV32IMC + Zicsr/Zifencei, soft-float, NO multilib ----
-ARG RISCV_PREFIX=/opt/riscv
-ENV RISCV=${RISCV_PREFIX}
-ENV PATH=${RISCV_PREFIX}/bin:${PATH}
-
-ARG RISCV_GNU_TOOLCHAIN_REF=
-RUN git clone https://github.com/riscv-collab/riscv-gnu-toolchain.git /tmp/riscv-gnu-toolchain \
- && cd /tmp/riscv-gnu-toolchain \
- && if [[ -n "${RISCV_GNU_TOOLCHAIN_REF}" ]]; then git checkout "${RISCV_GNU_TOOLCHAIN_REF}"; fi \
- && git submodule update --init --recursive \
- && ./configure \
-      --prefix="${RISCV_PREFIX}" \
-      --with-arch=rv32imc_zicsr_zifencei \
-      --with-abi=ilp32 \
-      --disable-multilib \
- && make -j"$(nproc)" newlib \
- && rm -rf /tmp/riscv-gnu-toolchain
-
-# Convenience defaults for bare-metal builds
-ENV RISCV_MARCH=rv32imc_zicsr_zifencei
-ENV RISCV_MABI=ilp32
-ENV RISCV_CFLAGS="-march=${RISCV_MARCH} -mabi=${RISCV_MABI}"
-ENV RISCV_CXXFLAGS="${RISCV_CFLAGS}"
-
-WORKDIR /work
-CMD ["bash"]
+CMD ["/bin/bash"]
