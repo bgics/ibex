@@ -23,27 +23,6 @@ int main(int argc, char **argv) {
 
   uint64_t last_elapsed_time = get_elapsed_time();
 
-  pcount_enable(0);
-  pcount_reset();
-  pcount_enable(1);
-
-  union {
-    float f;
-    uint32_t u;
-  } x;
-
-  x.f = 0.0f;
-
-  for (int i = 0; i < 30; i++) {
-    x.f += 1.13f;
-  }
-
-  pcount_enable(0);
-
-  puts("Float value is: ");
-  puthex(x.u);
-  puts("\n");
-
   while (last_elapsed_time <= 4) {
     uint64_t cur_time = get_elapsed_time();
     if (cur_time != last_elapsed_time) {
