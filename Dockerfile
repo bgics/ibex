@@ -54,9 +54,4 @@ RUN python3 -m venv ${VENV}
 
 ENV PATH="/opt/verilator/bin:/opt/riscv/bin:${VENV}/bin:${PATH}"
 
-COPY python-requirements.txt .
-COPY ./vendor/google_riscv-dv/requirements.txt ./vendor/google_riscv-dv/requirements.txt
-
-RUN pip install -U -r python-requirements.txt
-
 CMD ["/bin/bash"]

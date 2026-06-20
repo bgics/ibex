@@ -27,3 +27,4 @@ modelsim.ini
 *.bin
 *.elf
 *.vmem
+*.log
